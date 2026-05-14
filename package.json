@@ -1,0 +1,16 @@
+{
+  "name": "ai-werewolf",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:api": "npm --workspace apps/api run dev",
+    "dev:web": "npm --workspace apps/web run dev",
+    "build": "npm --workspaces run build",
+    "start:api": "npm --workspace apps/api run start",
+    "start:web": "npm --workspace apps/web run start"
+  }
+}
