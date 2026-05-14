@@ -70,7 +70,9 @@ export class AiService {
 
     try {
       const userPrompt = this.buildSpeechPrompt(context);
+      this.logger.log(`[${context.myName}] Speech Prompt:\n${userPrompt}`);
       const result = await this.callModel(SYSTEM_PROMPT_SPEECH, userPrompt);
+      this.logger.log(`[${context.myName}] Raw Response: ${result.slice(0, 500)}`);
       return this.parseSpeechResult(result, context);
     } catch (error) {
       this.logger.warn(
@@ -90,7 +92,9 @@ export class AiService {
 
     try {
       const userPrompt = this.buildVotePrompt(context, aiPlayerId);
+      this.logger.log(`[${context.myName}] Vote Prompt:\n${userPrompt}`);
       const result = await this.callModel(SYSTEM_PROMPT_VOTE, userPrompt);
+      this.logger.log(`[${context.myName}] Raw Vote Response: ${result.slice(0, 300)}`);
       return this.parseVoteResult(result, context);
     } catch (error) {
       this.logger.warn(

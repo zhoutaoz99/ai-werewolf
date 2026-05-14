@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Logger } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
 import { Server } from "socket.io";
 import { AiService } from "../ai/ai.service";
@@ -52,6 +52,7 @@ type RoomTimers = {
 
 @Injectable()
 export class GameService {
+  private readonly logger = new Logger(GameService.name);
   private readonly rooms = new Map<string, Room>();
   private readonly timers = new Map<string, RoomTimers>();
   private readonly aiSpeaking = new Map<string, boolean>();
@@ -522,6 +523,9 @@ export class GameService {
       try {
         const context = this.buildGameContext(room, aiPlayer);
         const action = await this.aiService.generateSpeech(context);
+        this.logger.log(
+          `[${aiPlayer.name}] Action: ${action.type}${action.type === "speak" ? ` "${action.content}"` : ""}`,
+        );
 
         if (action.type === "speak") {
           this.addMessage(room, aiPlayer, action.content);
@@ -548,8 +552,14 @@ export class GameService {
         const voteAction = await this.aiService.generateVote(context, aiPlayer.id);
 
         if (voteAction) {
+          this.logger.log(
+            `[${aiPlayer.name}] Vote: target=${voteAction.targetPlayerId} reason="${voteAction.reason ?? ""}"`,
+          );
           this.castVoteForPlayer(room, aiPlayer, voteAction.targetPlayerId);
         } else {
+          this.logger.log(
+            `[${aiPlayer.name}] Vote: LLM returned null, using fallback`,
+          );
           const target = this.chooseFallbackVoteTarget(room, aiPlayer);
           if (target) {
             this.castVoteForPlayer(room, aiPlayer, target.id);
