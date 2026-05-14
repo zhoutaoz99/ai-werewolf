@@ -585,6 +585,10 @@ export class GameService {
   }
 
   private getVoteCounts(room: Room): Record<string, number> {
+    if (!this.isVoteResultPublic(room, room.currentRound)) {
+      return {};
+    }
+
     const counts: Record<string, number> = {};
     for (const vote of room.votes) {
       if (vote.roundNo !== room.currentRound) {

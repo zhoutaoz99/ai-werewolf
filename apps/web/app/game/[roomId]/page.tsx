@@ -47,6 +47,7 @@ export default function GamePage() {
 
   const [chatDraft, setChatDraft] = useState("");
   const [votedTarget, setVotedTarget] = useState<string | null>(null);
+  const [selectedVoteTarget, setSelectedVoteTarget] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
 
   const room = getRoom(roomId);
@@ -70,6 +71,7 @@ export default function GamePage() {
   useEffect(() => {
     if (room?.phase === "voting") {
       setVotedTarget(null);
+      setSelectedVoteTarget(null);
     }
   }, [room?.currentRound, room?.phase]);
 
@@ -96,16 +98,31 @@ export default function GamePage() {
   const remainingMs = room.phaseEndsAt
     ? Math.max(0, new Date(room.phaseEndsAt).getTime() - now)
     : 0;
-  const canSpeak =
+  const latestOwnMessageAt = playerId
+    ? room.messages.reduce((latest, message) => {
+        if (message.playerId !== playerId) {
+          return latest;
+        }
+
+        return Math.max(latest, new Date(message.createdAt).getTime());
+      }, 0)
+    : 0;
+  const speakCooldownRemainingMs = latestOwnMessageAt
+    ? Math.max(0, latestOwnMessageAt + room.config.speakCooldownMs - now)
+    : 0;
+  const canSpeakBase =
     room.phase === "discussion" &&
     currentPlayer?.status === "alive" &&
     room.status === "playing";
+  const canSpeak = canSpeakBase && speakCooldownRemainingMs <= 0;
   const canVote =
     room.phase === "voting" &&
     currentPlayer?.status === "alive" &&
     room.status === "playing" &&
     !votedTarget;
   const alivePlayers = room.players.filter((player) => player.status === "alive");
+  const selectedVotePlayer =
+    alivePlayers.find((player) => player.id === selectedVoteTarget) ?? null;
   const transcriptItems = buildTranscriptItems(room);
 
   async function handleSendChat(event: FormEvent<HTMLFormElement>) {
@@ -118,6 +135,9 @@ export default function GamePage() {
     if (!content) {
       return;
     }
+    if (!canSpeak) {
+      return;
+    }
 
     const result = await sendChat(room.id, content);
     if (result.ok) {
@@ -125,14 +145,14 @@ export default function GamePage() {
     }
   }
 
-  async function handleVote(targetPlayerId: string) {
-    if (!room) {
+  async function handleConfirmVote() {
+    if (!room || !selectedVoteTarget) {
       return;
     }
 
-    const result = await castVote(room.id, targetPlayerId);
+    const result = await castVote(room.id, selectedVoteTarget);
     if (result.ok) {
-      setVotedTarget(targetPlayerId);
+      setVotedTarget(selectedVoteTarget);
     }
   }
 
@@ -232,10 +252,23 @@ export default function GamePage() {
               value={chatDraft}
               maxLength={240}
               disabled={!canSpeak || pending}
-              placeholder={canSpeak ? "输入发言，15 秒冷却" : "当前不可发言"}
+              placeholder={
+                canSpeak
+                  ? "输入发言，15 秒冷却"
+                  : speakCooldownRemainingMs > 0
+                    ? `发言冷却中，还剩 ${formatCooldownSeconds(
+                        speakCooldownRemainingMs,
+                      )} 秒`
+                    : "当前不可发言"
+              }
               onChange={(event) => setChatDraft(event.target.value)}
             />
             <button disabled={!canSpeak || pending || !chatDraft.trim()}>发送</button>
+            {canSpeakBase && speakCooldownRemainingMs > 0 && (
+              <span className="cooldown-line">
+                发言冷却：{formatCooldownSeconds(speakCooldownRemainingMs)} 秒
+              </span>
+            )}
           </form>
         </section>
 
@@ -253,21 +286,49 @@ export default function GamePage() {
           )}
 
           {room.phase === "voting" && (
-            <div className="vote-options vertical">
-              {alivePlayers
-                .filter((player) => player.id !== playerId)
-                .map((player) => (
-                  <button
-                    className={votedTarget === player.id ? "selected" : ""}
-                    key={player.id}
-                    disabled={!canVote || pending}
-                    onClick={() => handleVote(player.id)}
-                  >
-                    <span>#{player.seatNo}</span>
-                    <small>{room.voteCounts[player.id] ?? 0} 票</small>
-                  </button>
-                ))}
-            </div>
+            <>
+              {votedTarget ? (
+                <div className="phase-hint">
+                  <strong>投票已提交</strong>
+                  <p>等待本轮投票结束后公开结果。</p>
+                </div>
+              ) : (
+                <>
+                  <div className="vote-options vertical">
+                    {alivePlayers
+                      .filter((player) => player.id !== playerId)
+                      .map((player) => (
+                        <button
+                          className={selectedVoteTarget === player.id ? "selected" : ""}
+                          key={player.id}
+                          disabled={!canVote || pending}
+                          onClick={() => setSelectedVoteTarget(player.id)}
+                        >
+                          <span>#{player.seatNo}</span>
+                        </button>
+                      ))}
+                  </div>
+
+                  {selectedVotePlayer && (
+                    <div className="vote-confirm">
+                      <p>确认投给 #{selectedVotePlayer.seatNo}？</p>
+                      <div>
+                        <button
+                          className="secondary"
+                          disabled={pending}
+                          onClick={() => setSelectedVoteTarget(null)}
+                        >
+                          取消
+                        </button>
+                        <button disabled={!canVote || pending} onClick={handleConfirmVote}>
+                          确认投票
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </>
           )}
 
           {room.status === "finished" && (
@@ -383,4 +444,8 @@ function formatVoteResultLine(room: RoomSnapshot, votes: PublicVoteResult[]) {
         )}`,
     )
     .join("，");
+}
+
+function formatCooldownSeconds(ms: number) {
+  return Math.ceil(ms / 1000);
 }

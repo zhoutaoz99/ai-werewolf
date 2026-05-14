@@ -28,6 +28,12 @@ body {
     sans-serif;
 }
 
+html:has(.immersive-page),
+body:has(.immersive-page) {
+  height: 100%;
+  overflow: hidden;
+}
+
 button,
 input {
   font: inherit;
@@ -416,6 +422,13 @@ p {
   gap: 10px;
 }
 
+.cooldown-line {
+  color: var(--warning);
+  font-size: 13px;
+  font-weight: 800;
+  grid-column: 1 / -1;
+}
+
 .vote-panel {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -548,7 +561,10 @@ p {
   color: #e5edf6;
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
-  min-height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
   padding: 18px;
 }
 
@@ -618,6 +634,7 @@ p {
   grid-template-columns: 280px minmax(0, 1fr) 300px;
   min-height: 0;
   margin: 0 auto;
+  overflow: hidden;
   width: min(1440px, 100%);
 }
 
@@ -627,6 +644,7 @@ p {
   border-radius: 8px;
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
   min-height: 0;
+  overflow: hidden;
   padding: 14px;
 }
 
@@ -640,7 +658,7 @@ p {
 .player-dock-list {
   display: grid;
   gap: 10px;
-  overflow: auto;
+  overflow: hidden;
 }
 
 .immersive-page .player-row {
@@ -741,6 +759,10 @@ p {
   color: #ffffff;
 }
 
+.immersive-composer .cooldown-line {
+  color: #fcd34d;
+}
+
 .phase-hint {
   border: 1px solid rgba(148, 163, 184, 0.25);
   border-radius: 8px;
@@ -756,6 +778,27 @@ p {
 
 .vote-options.vertical {
   grid-template-columns: 1fr;
+}
+
+.vote-confirm {
+  border: 1px solid rgba(251, 191, 36, 0.32);
+  border-radius: 8px;
+  background: rgba(120, 53, 15, 0.24);
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.vote-confirm p {
+  color: #fde68a;
+  font-weight: 800;
+  line-height: 1.4;
+}
+
+.vote-confirm div {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
 }
 
 .missing-game {
@@ -787,6 +830,10 @@ p {
 
   .game {
     min-height: auto;
+  }
+
+  .game-stage {
+    grid-template-rows: auto minmax(0, 1fr) auto;
   }
 }
 
