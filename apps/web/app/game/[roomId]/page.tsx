@@ -395,7 +395,9 @@ function renderTranscriptItem(room: RoomSnapshot, item: Exclude<TranscriptItem, 
     return (
       <div className="vote-result-card" key={`vote-result-${item.roundNo}`}>
         <strong>第 {item.roundNo} 轮投票结果：</strong>
-        <span>{formatVoteResultLine(room, item.votes)}</span>
+        <span>
+          {formatVoteResultLine(room, item.votes)}；{formatEliminationLine(room, item.roundNo)}
+        </span>
       </div>
     );
   }
@@ -444,6 +446,18 @@ function formatVoteResultLine(room: RoomSnapshot, votes: PublicVoteResult[]) {
         )}`,
     )
     .join("，");
+}
+
+function formatEliminationLine(room: RoomSnapshot, roundNo: number) {
+  const eliminatedPlayer = room.players.find(
+    (player) => player.eliminatedRound === roundNo,
+  );
+
+  if (!eliminatedPlayer) {
+    return "无人出局";
+  }
+
+  return `#${eliminatedPlayer.seatNo} 出局`;
 }
 
 function formatCooldownSeconds(ms: number) {

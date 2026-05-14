@@ -473,6 +473,24 @@ p {
   padding: 18px;
 }
 
+.section-heading-row {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.compact-button {
+  background: #1f2937;
+  font-size: 14px;
+  min-height: 34px;
+  padding: 0 12px;
+}
+
+.compact-button:hover:not(:disabled) {
+  background: #111827;
+}
+
 .lobby-card h2,
 .waiting-card h2 {
   font-size: 24px;
@@ -559,8 +577,8 @@ p {
     linear-gradient(180deg, rgba(6, 78, 59, 0.18), transparent 260px),
     #0f172a;
   color: #e5edf6;
-  display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
   height: 100dvh;
   min-height: 0;
   overflow: hidden;
@@ -632,6 +650,7 @@ p {
   display: grid;
   gap: 14px;
   grid-template-columns: 280px minmax(0, 1fr) 300px;
+  flex: 1 1 auto;
   min-height: 0;
   margin: 0 auto;
   overflow: hidden;

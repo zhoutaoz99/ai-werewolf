@@ -49,6 +49,14 @@ export class GameGateway
     }
   }
 
+  @SubscribeMessage("room.list")
+  handleListRooms() {
+    return {
+      ok: true,
+      rooms: this.gameService.listRooms(),
+    };
+  }
+
   @SubscribeMessage("room.create")
   handleCreateRoom(
     @ConnectedSocket() client: Socket,

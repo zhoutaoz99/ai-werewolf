@@ -17,6 +17,7 @@ export default function Home() {
     setPlayerName,
     setRoomCode,
     setDiscussionMinutes,
+    refreshRooms,
     createRoom,
     joinRoom,
   } = useGameClient();
@@ -98,9 +99,18 @@ export default function Home() {
         </section>
 
         <section className="panel lobby-card">
-          <div>
-            <p className="eyebrow">Rooms</p>
-            <h2>最近房间</h2>
+          <div className="section-heading-row">
+            <div>
+              <p className="eyebrow">Rooms</p>
+              <h2>最近房间</h2>
+            </div>
+            <button
+              className="compact-button"
+              disabled={pending}
+              onClick={() => void refreshRooms()}
+            >
+              刷新
+            </button>
           </div>
 
           {rooms.length === 0 ? (

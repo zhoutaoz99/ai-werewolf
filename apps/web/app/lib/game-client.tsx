@@ -27,6 +27,7 @@ type GameClientContextValue = {
   setError: (value: string) => void;
   getRoom: (roomId: string) => RoomSnapshot | null;
   getPlayerId: (roomId: string) => string | null;
+  refreshRooms: () => Promise<{ ok: boolean; error?: string }>;
   createRoom: () => Promise<ActionResult>;
   joinRoom: (roomId?: string) => Promise<ActionResult>;
   startGame: (roomId: string) => Promise<ActionResult>;
@@ -186,6 +187,56 @@ export function GameClientProvider({ children }: { children: ReactNode }) {
       getRoom: (roomId: string) =>
         rooms.find((room) => room.id === roomId.toUpperCase()) ?? null,
       getPlayerId: (roomId: string) => playerIds[roomId.toUpperCase()] ?? null,
+      refreshRooms: () => {
+        setError("");
+        const socket = socketRef.current;
+        if (!socket || !connected) {
+          const result = {
+            ok: false,
+            error: "后端尚未连接，请确认 API 服务已启动",
+          };
+          setError(result.error);
+          return Promise.resolve(result);
+        }
+
+        setPending(true);
+        return new Promise((resolve) => {
+          socket
+            .timeout(5_000)
+            .emit(
+              "room.list",
+              {},
+              (
+                err: Error | null,
+                result?: { ok: boolean; error?: string; rooms?: RoomSnapshot[] },
+              ) => {
+                setPending(false);
+                if (err) {
+                  const timeoutResult = {
+                    ok: false,
+                    error: "刷新超时，请稍后重试",
+                  };
+                  setError(timeoutResult.error);
+                  resolve(timeoutResult);
+                  return;
+                }
+
+                if (!result?.ok) {
+                  const failedResult = {
+                    ok: false,
+                    error: result?.error ?? "刷新失败",
+                  };
+                  setError(failedResult.error);
+                  resolve(failedResult);
+                  return;
+                }
+
+                setRooms(result.rooms ?? []);
+                resolve({ ok: true });
+              },
+            );
+        });
+      },
       createRoom: async () => {
         if (!normalizedName) {
           const result = { ok: false, error: "请先输入昵称" };
