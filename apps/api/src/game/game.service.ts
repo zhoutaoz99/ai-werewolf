@@ -2,7 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
 import { Server } from "socket.io";
 import { AiService } from "../ai/ai.service";
-import { GameContext } from "../ai/ai.types";
+import { GameContext, RoundVoteSummary, VoteRecord } from "../ai/ai.types";
 import {
   ActionResult,
   CastVotePayload,
@@ -594,15 +594,40 @@ export class GameService {
       }
     }
 
+    const voteHistory: RoundVoteSummary[] = [];
+    for (let r = 1; r < room.currentRound; r++) {
+      const roundVotes: VoteRecord[] = [];
+      for (const vote of room.votes) {
+        if (vote.roundNo === r) {
+          roundVotes.push({
+            voterSeatNo: seatMap.get(vote.voterPlayerId) ?? 0,
+            targetSeatNo: seatMap.get(vote.targetPlayerId) ?? 0,
+          });
+        }
+      }
+
+      const eliminated = room.players.find(
+        (p) => p.eliminatedRound === r,
+      );
+
+      voteHistory.push({
+        roundNo: r,
+        votes: roundVotes,
+        eliminatedSeatNo: eliminated?.seatNo ?? null,
+      });
+    }
+
     return {
       roundNo: room.currentRound,
       phase: room.phase,
       remainingTimeMs: remainingMs,
       myName: aiPlayer.name,
+      mySeatNo: aiPlayer.seatNo,
       alivePlayers,
       recentMessages,
       myLastSpeech: myLastMessage?.content ?? null,
       currentVoteCounts,
+      voteHistory,
     };
   }
 

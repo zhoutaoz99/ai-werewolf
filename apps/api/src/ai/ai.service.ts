@@ -102,7 +102,7 @@ export class AiService {
   private buildSpeechPrompt(context: GameContext): string {
     const parts: string[] = [];
 
-    parts.push(`你的名字是${context.myName}，当前轮次：第${context.roundNo}轮`);
+    parts.push(`你是${context.mySeatNo}号位，名字叫${context.myName}，当前轮次：第${context.roundNo}轮`);
     parts.push(
       `剩余时间：${Math.ceil(context.remainingTimeMs / 1000)}秒`,
     );
@@ -119,6 +119,19 @@ export class AiService {
       for (const msg of context.recentMessages) {
         const prefix = msg.isSelf ? "你" : msg.playerName;
         parts.push(`  ${prefix}：${msg.content}`);
+      }
+    }
+
+    if (context.voteHistory.length > 0) {
+      parts.push("历史投票：");
+      for (const round of context.voteHistory) {
+        const voteDesc = round.votes
+          .map((v) => `${v.voterSeatNo}号→${v.targetSeatNo}号`)
+          .join("、");
+        const eliminated = round.eliminatedSeatNo != null
+          ? ` → ${round.eliminatedSeatNo}号被淘汰`
+          : ` → 平票，无人淘汰`;
+        parts.push(`  第${round.roundNo}轮：${voteDesc}${eliminated}`);
       }
     }
 
@@ -143,7 +156,7 @@ export class AiService {
   ): string {
     const parts: string[] = [];
 
-    parts.push(`你的名字是${context.myName}，当前轮次：第${context.roundNo}轮（投票阶段）`);
+    parts.push(`你是${context.mySeatNo}号位，名字叫${context.myName}，当前轮次：第${context.roundNo}轮（投票阶段）`);
 
     const targets = context.alivePlayers.filter((p) => p.id !== aiPlayerId);
     parts.push(
@@ -155,6 +168,19 @@ export class AiService {
       for (const msg of context.recentMessages) {
         const prefix = msg.isSelf ? "你" : msg.playerName;
         parts.push(`  ${prefix}：${msg.content}`);
+      }
+    }
+
+    if (context.voteHistory.length > 0) {
+      parts.push("历史投票：");
+      for (const round of context.voteHistory) {
+        const voteDesc = round.votes
+          .map((v) => `${v.voterSeatNo}号→${v.targetSeatNo}号`)
+          .join("、");
+        const eliminated = round.eliminatedSeatNo != null
+          ? ` → ${round.eliminatedSeatNo}号被淘汰`
+          : ` → 平票，无人淘汰`;
+        parts.push(`  第${round.roundNo}轮：${voteDesc}${eliminated}`);
       }
     }
 

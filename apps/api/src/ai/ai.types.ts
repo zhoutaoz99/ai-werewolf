@@ -22,13 +22,26 @@ export interface ChatMessageInput {
   isSelf: boolean;
 }
 
+export interface VoteRecord {
+  voterSeatNo: number;
+  targetSeatNo: number;
+}
+
+export interface RoundVoteSummary {
+  roundNo: number;
+  votes: VoteRecord[];
+  eliminatedSeatNo: number | null;
+}
+
 export interface GameContext {
   roundNo: number;
   phase: string;
   remainingTimeMs: number;
   myName: string;
+  mySeatNo: number;
   alivePlayers: Array<{ id: string; seatNo: number }>;
   recentMessages: ChatMessageInput[];
   myLastSpeech: string | null;
   currentVoteCounts: Record<string, number>;
+  voteHistory: RoundVoteSummary[];
 }
