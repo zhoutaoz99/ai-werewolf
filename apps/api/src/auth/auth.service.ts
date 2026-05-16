@@ -139,6 +139,28 @@ export class AuthService {
     };
   }
 
+  addPointsToAccounts(awards: Array<{ accountId: string; points: number }>) {
+    const updatedAccounts: PublicAccount[] = [];
+
+    for (const award of awards) {
+      const points = Math.max(0, Math.floor(award.points));
+      if (points <= 0) {
+        continue;
+      }
+
+      const account = this.findAccountById(award.accountId);
+      if (!account) {
+        continue;
+      }
+
+      account.points += points;
+      account.updatedAt = new Date().toISOString();
+      updatedAccounts.push(this.toPublicAccount(account));
+    }
+
+    return updatedAccounts;
+  }
+
   logout(token: string | undefined) {
     const normalizedToken = this.normalizeToken(token);
     if (normalizedToken) {

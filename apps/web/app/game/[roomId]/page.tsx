@@ -2,6 +2,7 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { useAuth } from "../../lib/auth-client";
 import { useGameClient } from "../../lib/game-client";
 import type {
   PublicMessage,
@@ -35,6 +36,8 @@ export default function GamePage() {
   const roomId = params.roomId.toUpperCase();
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const reconnectAttempted = useRef(false);
+  const pointsRefreshRoomRef = useRef<string | null>(null);
+  const { refreshMe } = useAuth();
   const {
     connected,
     pending,
@@ -100,6 +103,20 @@ export default function GamePage() {
       setSelectedVoteTarget(null);
     }
   }, [room?.currentRound, room?.phase]);
+
+  useEffect(() => {
+    if (
+      !room ||
+      room.status !== "finished" ||
+      room.pointAwards.length === 0 ||
+      pointsRefreshRoomRef.current === room.id
+    ) {
+      return;
+    }
+
+    pointsRefreshRoomRef.current = room.id;
+    void refreshMe();
+  }, [refreshMe, room]);
 
   const currentPlayer = useMemo(() => {
     if (!room || !playerId) {
@@ -209,7 +226,7 @@ export default function GamePage() {
           <h2>{room.winner === "human" ? "真人玩家获胜" : "人类玩家失败"}</h2>
           <p>
             {room.winner === "human"
-              ? `真人玩家平分 ${room.config.rewardPool} 积分。`
+              ? formatPointAwardSummary(room)
               : "4 轮结束后仍有 AI 模拟玩家在场，本局挑战失败。"}
           </p>
           <button className="secondary" onClick={() => router.push("/")}>
@@ -483,6 +500,18 @@ function formatEliminationLine(room: RoomSnapshot, roundNo: number) {
   }
 
   return `#${eliminatedPlayer.seatNo} 出局`;
+}
+
+function formatPointAwardSummary(room: RoomSnapshot) {
+  if (room.pointAwards.length === 0) {
+    return `本局奖励池 ${room.config.rewardPool} 积分，暂无可结算的存活真人玩家。`;
+  }
+
+  const awardLine = room.pointAwards
+    .map((award) => `#${getPlayerSeatNo(room, award.playerId)} +${award.points}`)
+    .join("，");
+
+  return `存活真人玩家平分 ${room.config.rewardPool} 积分：${awardLine}`;
 }
 
 function formatCooldownSeconds(ms: number) {

@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { Server } from "socket.io";
 import { AiService } from "../ai/ai.service";
 import { GameContext, RoundVoteSummary, VoteRecord } from "../ai/ai.types";
+import { AuthService } from "../auth/auth.service";
 import {
   ActionResult,
   CastVotePayload,
@@ -13,6 +14,7 @@ import {
   JoinRoomPayload,
   LeaveRoomPayload,
   Player,
+  PointAward,
   PlayerType,
   PublicVoteResult,
   ReconnectPayload,
@@ -59,7 +61,10 @@ export class GameService {
   private readonly aiSpeaking = new Map<string, boolean>();
   private server?: Server;
 
-  constructor(private readonly aiService: AiService) {}
+  constructor(
+    private readonly aiService: AiService,
+    private readonly authService: AuthService,
+  ) {}
 
   bindServer(server: Server) {
     this.server = server;
@@ -90,6 +95,8 @@ export class GameService {
       winner: null,
       messages: [],
       votes: [],
+      pointAwards: [],
+      rewardSettledAt: null,
       createdAt: now,
       updatedAt: now,
     };
@@ -323,6 +330,8 @@ export class GameService {
     room.currentRound = 0;
     room.messages = [];
     room.votes = [];
+    room.pointAwards = [];
+    room.rewardSettledAt = null;
     for (const player of room.players) {
       player.status = "alive";
       player.lastSpokeAt = 0;
@@ -460,6 +469,7 @@ export class GameService {
     room.phase = "game_over";
     room.phaseEndsAt = null;
     room.winner = winner;
+    this.settleRewards(room, winner);
     this.touch(room);
     this.clearTimers(room.id);
     const snapshot = this.toSnapshot(room);
@@ -797,6 +807,7 @@ export class GameService {
       messages: room.messages.slice(-80).map((message) => this.publicMessage(message, room)),
       voteCounts: this.getVoteCounts(room),
       voteResults: this.getPublicVoteResults(room),
+      pointAwards: room.pointAwards,
       config: {
         maxHumanPlayers: MAX_HUMAN_PLAYERS,
         aiPlayerCount: AI_PLAYER_COUNT,
@@ -860,6 +871,49 @@ export class GameService {
     }
 
     return room.currentRound === roundNo && room.phase === "resolving";
+  }
+
+  private settleRewards(room: Room, winner: Winner) {
+    if (room.rewardSettledAt) {
+      return;
+    }
+
+    room.rewardSettledAt = new Date().toISOString();
+    if (winner !== "human") {
+      room.pointAwards = [];
+      return;
+    }
+
+    const eligiblePlayers = room.players
+      .filter(
+        (player) =>
+          player.type === "human" &&
+          player.status === "alive" &&
+          Boolean(player.accountId),
+      )
+      .sort((a, b) => a.seatNo - b.seatNo);
+
+    if (eligiblePlayers.length === 0) {
+      room.pointAwards = [];
+      return;
+    }
+
+    const basePoints = Math.floor(REWARD_POOL / eligiblePlayers.length);
+    const remainder = REWARD_POOL % eligiblePlayers.length;
+    const awards: PointAward[] = eligiblePlayers.map((player, index) => ({
+      playerId: player.id,
+      playerName: player.name,
+      points: basePoints + (index < remainder ? 1 : 0),
+    }));
+
+    this.authService.addPointsToAccounts(
+      awards.flatMap((award, index) => {
+        const accountId = eligiblePlayers[index].accountId;
+        return accountId ? [{ accountId, points: award.points }] : [];
+      }),
+    );
+
+    room.pointAwards = awards;
   }
 
   private createHumanPlayer(

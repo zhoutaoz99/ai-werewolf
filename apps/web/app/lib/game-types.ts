@@ -36,6 +36,12 @@ export type PublicVoteResult = {
   createdAt: string;
 };
 
+export type PointAward = {
+  playerId: string;
+  playerName: string;
+  points: number;
+};
+
 export type RoomSnapshot = {
   id: string;
   status: RoomStatus;
@@ -48,6 +54,7 @@ export type RoomSnapshot = {
   messages: PublicMessage[];
   voteCounts: Record<string, number>;
   voteResults: PublicVoteResult[];
+  pointAwards: PointAward[];
   config: {
     maxHumanPlayers: number;
     aiPlayerCount: number;

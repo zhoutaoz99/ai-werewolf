@@ -48,6 +48,12 @@ export interface PublicVoteResult {
   createdAt: string;
 }
 
+export interface PointAward {
+  playerId: string;
+  playerName: string;
+  points: number;
+}
+
 export interface Room {
   id: string;
   status: RoomStatus;
@@ -60,6 +66,8 @@ export interface Room {
   winner: Winner;
   messages: ChatMessage[];
   votes: Vote[];
+  pointAwards: PointAward[];
+  rewardSettledAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -86,6 +94,7 @@ export interface RoomSnapshot {
   messages: Array<Omit<ChatMessage, "source"> & { source?: PlayerType }>;
   voteCounts: Record<string, number>;
   voteResults: PublicVoteResult[];
+  pointAwards: PointAward[];
   config: {
     maxHumanPlayers: number;
     aiPlayerCount: number;
