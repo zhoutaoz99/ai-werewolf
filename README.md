@@ -73,6 +73,62 @@ docker run -d \
 - 后端：http://localhost:3001
 - 健康检查：http://localhost:3001/health
 
+## Docker 部署
+
+使用 `docker compose` 一键启动全部服务（API、前端、PostgreSQL、Redis）。
+
+### 1. 配置环境变量
+
+从示例文件复制并填入必填项：
+
+```bash
+cp .env.example .env
+```
+
+编辑 `.env`，至少填写 `AI_API_KEY`：
+
+```bash
+AI_API_KEY=sk-your-key-here
+```
+
+其余变量均有默认值，按需修改。`DATABASE_URL` 和 `REDIS_URL` 无需修改，`docker-compose.yml` 已使用容器内部主机名。
+
+### 2. 构建并启动
+
+```bash
+docker compose up -d --build
+```
+
+### 3. 访问服务
+
+- 前端：http://localhost:3000
+- 后端：http://localhost:3001
+- 健康检查：http://localhost:3001/health
+
+### 4. 自定义端口
+
+如需修改宿主机暴露的端口，在 `.env` 中添加：
+
+```bash
+API_PORT=3001
+WEB_PORT=3000
+NEXT_PUBLIC_API_URL=http://localhost:3001
+```
+
+### 5. 常用命令
+
+```bash
+# 查看日志
+docker compose logs -f api
+docker compose logs -f web
+
+# 停止服务
+docker compose down
+
+# 停止并清除数据卷
+docker compose down -v
+```
+
 ## 可选环境变量
 
 后端支持以下环境变量：
