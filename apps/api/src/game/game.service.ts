@@ -814,52 +814,58 @@ export class GameService {
     voter: Player,
     targetPlayerId?: string,
   ): Promise<ActionResult> {
-    if (room.status !== "playing" || room.phase !== "voting") {
-      return this.fail("当前不在投票阶段");
+    const saved = await this.applyWithLock(room.id, (latest) => {
+      if (latest.status !== "playing" || latest.phase !== "voting") {
+        return false;
+      }
+
+      const freshVoter = latest.players.find((p) => p.id === voter.id);
+      if (!freshVoter || freshVoter.status !== "alive") {
+        return false;
+      }
+
+      const target = latest.players.find(
+        (player) => player.id === targetPlayerId && player.status === "alive",
+      );
+      if (!target) {
+        return false;
+      }
+
+      if (target.id === voter.id) {
+        return false;
+      }
+
+      const hasVoted = latest.votes.some(
+        (vote) => vote.roundNo === latest.currentRound && vote.voterPlayerId === voter.id,
+      );
+      if (hasVoted) {
+        return false;
+      }
+
+      latest.votes.push({
+        id: randomUUID(),
+        roundNo: latest.currentRound,
+        voterPlayerId: voter.id,
+        targetPlayerId: target.id,
+        createdAt: new Date().toISOString(),
+      });
+      this.touch(latest);
+      return true;
+    });
+
+    if (!saved) {
+      return this.fail("投票失败，请重试");
     }
 
-    if (voter.status !== "alive") {
-      return this.fail("已出局玩家不能投票");
-    }
+    const snapshot = this.toSnapshot(saved);
+    this.server?.to(saved.id).emit("vote.updated", snapshot);
+    this.broadcastRoom(saved);
 
-    const target = room.players.find(
-      (player) => player.id === targetPlayerId && player.status === "alive",
-    );
-    if (!target) {
-      return this.fail("投票目标无效");
-    }
-
-    if (target.id === voter.id) {
-      return this.fail("不能投给自己");
-    }
-
-    const hasVoted = room.votes.some(
-      (vote) => vote.roundNo === room.currentRound && vote.voterPlayerId === voter.id,
-    );
-    if (hasVoted) {
-      return this.fail("本轮已经投过票");
-    }
-
-    const vote: Vote = {
-      id: randomUUID(),
-      roundNo: room.currentRound,
-      voterPlayerId: voter.id,
-      targetPlayerId: target.id,
-      createdAt: new Date().toISOString(),
-    };
-    room.votes.push(vote);
-    this.touch(room);
-    await this.roomRepository.save(room);
-
-    const snapshot = this.toSnapshot(room);
-    this.server?.to(room.id).emit("vote.updated", snapshot);
-    this.broadcastRoom(room);
-
-    const aliveVoters = room.players.filter((player) => player.status === "alive");
-    const roundVotes = room.votes.filter((item) => item.roundNo === room.currentRound);
+    const aliveVoters = saved.players.filter((player) => player.status === "alive");
+    const roundVotes = saved.votes.filter((item) => item.roundNo === saved.currentRound);
     if (roundVotes.length >= aliveVoters.length) {
       setTimeout(() => {
-        void this.resolveVotesById(room.id);
+        void this.resolveVotesById(saved.id);
       }, 500);
     }
 
