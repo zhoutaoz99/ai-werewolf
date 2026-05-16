@@ -40,6 +40,7 @@ export class GameGateway
 
   afterInit(server: Server) {
     this.gameService.bindServer(server);
+    void this.gameService.recoverStuckRooms();
   }
 
   async handleConnection(client: Socket) {

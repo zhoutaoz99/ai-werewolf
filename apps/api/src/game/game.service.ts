@@ -217,30 +217,31 @@ export class GameService {
     payload: ReconnectPayload,
   ): Promise<ActionResult> {
     const roomId = this.normalizeRoomId(payload.roomId);
-    const room = await this.roomRepository.findById(roomId);
+
+    const room = await this.applyWithLock(roomId, (room) => {
+      const player = room.players.find(
+        (candidate) => candidate.id === payload.playerId && candidate.type === "human",
+      );
+      if (!player) {
+        return false;
+      }
+
+      this.cancelDisconnectRemoval(room.id, player.id);
+
+      player.socketId = socketId;
+      player.connected = true;
+      this.touch(room);
+      return true;
+    });
 
     if (!room) {
-      return this.fail("房间不存在");
+      return this.fail("房间不存在或操作冲突");
     }
-
-    const player = room.players.find(
-      (candidate) => candidate.id === payload.playerId && candidate.type === "human",
-    );
-    if (!player) {
-      return this.fail("玩家不存在于该房间");
-    }
-
-    this.cancelDisconnectRemoval(room.id, player.id);
-
-    player.socketId = socketId;
-    player.connected = true;
-    this.touch(room);
-    await this.roomRepository.save(room);
 
     return {
       ok: true,
       room: this.toSnapshot(room),
-      playerId: player.id,
+      playerId: payload.playerId,
     };
   }
 
@@ -258,44 +259,40 @@ export class GameService {
         continue;
       }
 
-      // Reload the room fresh to avoid overwriting concurrent changes (e.g. new messages)
-      const room = await this.roomRepository.findById(candidate.id);
-      if (!room) {
-        continue;
-      }
+      const room = await this.applyWithLock(candidate.id, (room) => {
+        const freshPlayer = room.players.find((p) => p.id === player.id);
+        if (!freshPlayer) {
+          return false;
+        }
 
-      const freshPlayer = room.players.find((p) => p.id === player.id);
-      if (!freshPlayer) {
-        continue;
-      }
+        freshPlayer.connected = false;
+        freshPlayer.socketId = undefined;
 
-      freshPlayer.connected = false;
-      freshPlayer.socketId = undefined;
+        if (room.status === "playing" || room.status === "finished") {
+          this.touch(room);
+          return true;
+        }
 
-      if (room.status === "playing" || room.status === "finished") {
+        const timerKey = `${room.id}:${freshPlayer.id}`;
+        const existingTimer = this.disconnectTimers.get(timerKey);
+        if (existingTimer) {
+          clearTimeout(existingTimer);
+        }
+
+        this.disconnectTimers.set(
+          timerKey,
+          setTimeout(() => {
+            void this.removeDisconnectedPlayerAfterGrace(room.id, freshPlayer.id);
+          }, 30_000),
+        );
+
         this.touch(room);
-        await this.roomRepository.save(room);
+        return true;
+      });
+
+      if (room) {
         updatedRooms.push(this.toSnapshot(room));
-        continue;
       }
-
-      // Waiting room: schedule removal after 30s if player doesn't reconnect
-      const timerKey = `${room.id}:${freshPlayer.id}`;
-      const existingTimer = this.disconnectTimers.get(timerKey);
-      if (existingTimer) {
-        clearTimeout(existingTimer);
-      }
-
-      this.disconnectTimers.set(
-        timerKey,
-        setTimeout(() => {
-          void this.removeDisconnectedPlayerAfterGrace(room.id, freshPlayer.id);
-        }, 30_000),
-      );
-
-      this.touch(room);
-      await this.roomRepository.save(room);
-      updatedRooms.push(this.toSnapshot(room));
     }
 
     return updatedRooms;
@@ -443,6 +440,30 @@ export class GameService {
   async listRooms(): Promise<RoomSnapshot[]> {
     const rooms = await this.roomRepository.list();
     return rooms.map((room) => this.toSnapshot(room));
+  }
+
+  async recoverStuckRooms() {
+    const rooms = await this.roomRepository.list(200);
+    for (const room of rooms) {
+      if (room.status !== "playing") {
+        continue;
+      }
+
+      const endsAt = room.phaseEndsAt
+        ? new Date(room.phaseEndsAt).getTime()
+        : 0;
+      if (endsAt <= 0 || Date.now() < endsAt) {
+        continue;
+      }
+
+      if (room.phase === "discussion") {
+        this.logger.log(`Recovering stuck room ${room.id}: discussion expired, starting vote`);
+        await this.startVoting(room);
+      } else if (room.phase === "voting") {
+        this.logger.log(`Recovering stuck room ${room.id}: voting expired, resolving votes`);
+        await this.resolveVotes(room);
+      }
+    }
   }
 
   private async startDiscussion(room: Room) {
@@ -1074,6 +1095,38 @@ export class GameService {
     }
 
     return Math.max(Math.floor(minutes), 1) * 60_000;
+  }
+
+  /**
+   * Apply a mutation to a room with optimistic locking.
+   * Loads the room, runs `mutate`, and saves with a version check.
+   * Retries up to 3 times if another operation saved in between.
+   */
+  private async applyWithLock(
+    roomId: string,
+    mutate: (room: Room) => boolean,
+  ): Promise<Room | null> {
+    const normalizedId = this.normalizeRoomId(roomId);
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const room = await this.roomRepository.findById(normalizedId);
+      if (!room) {
+        return null;
+      }
+
+      const expectedUpdatedAt = room.updatedAt;
+      if (!mutate(room)) {
+        return null;
+      }
+
+      const saved = await this.roomRepository.save(room, expectedUpdatedAt);
+      if (saved) {
+        return room;
+      }
+    }
+
+    this.logger.warn(`applyWithLock: gave up after 3 retries for room ${normalizedId}`);
+    return null;
   }
 
   private getRoom(roomId: string | undefined) {

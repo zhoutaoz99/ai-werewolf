@@ -41,35 +41,57 @@ export class GameRoomRepository {
     return room;
   }
 
-  async save(room: Room) {
-    await this.postgres.query(
-      `
-        INSERT INTO game_rooms (
-          id,
-          status,
-          phase,
-          room_data,
-          created_at,
-          updated_at
-        )
-        VALUES ($1, $2, $3, $4::jsonb, $5, $6)
-        ON CONFLICT (id) DO UPDATE
-        SET
-          status = EXCLUDED.status,
-          phase = EXCLUDED.phase,
-          room_data = EXCLUDED.room_data,
-          updated_at = EXCLUDED.updated_at
-      `,
-      [
-        room.id,
-        room.status,
-        room.phase,
-        JSON.stringify(room),
-        room.createdAt,
-        room.updatedAt,
-      ],
-    );
+  async save(room: Room, expectedUpdatedAt?: string): Promise<boolean> {
+    if (expectedUpdatedAt) {
+      const result = await this.postgres.query(
+        `
+          UPDATE game_rooms
+          SET status = $2, phase = $3, room_data = $4::jsonb, updated_at = $5
+          WHERE id = $1 AND updated_at = $6
+        `,
+        [
+          room.id,
+          room.status,
+          room.phase,
+          JSON.stringify(room),
+          room.updatedAt,
+          expectedUpdatedAt,
+        ],
+      );
+      if (result.rowCount === 0) {
+        return false;
+      }
+    } else {
+      await this.postgres.query(
+        `
+          INSERT INTO game_rooms (
+            id,
+            status,
+            phase,
+            room_data,
+            created_at,
+            updated_at
+          )
+          VALUES ($1, $2, $3, $4::jsonb, $5, $6)
+          ON CONFLICT (id) DO UPDATE
+          SET
+            status = EXCLUDED.status,
+            phase = EXCLUDED.phase,
+            room_data = EXCLUDED.room_data,
+            updated_at = EXCLUDED.updated_at
+        `,
+        [
+          room.id,
+          room.status,
+          room.phase,
+          JSON.stringify(room),
+          room.createdAt,
+          room.updatedAt,
+        ],
+      );
+    }
     await this.cache.setJson(this.roomKey(room.id), room, this.cacheTtlSeconds);
+    return true;
   }
 
   async delete(roomId: string) {
