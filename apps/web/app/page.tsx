@@ -271,15 +271,25 @@ export default function Home() {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const refreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const refreshRoomsRef = useRef(refreshRooms);
+  refreshRoomsRef.current = refreshRooms;
 
-  // Auto-refresh room list every 3 seconds
+  // Refresh room list immediately on mount and every 3 seconds (silent: no UI state change)
   useEffect(() => {
     if (!connected) return;
-    refreshTimerRef.current = setInterval(() => void refreshRooms(), 3000);
+    void refreshRoomsRef.current(true);
+    refreshTimerRef.current = setInterval(() => void refreshRoomsRef.current(true), 3000);
+
+    function handleVisibility() {
+      if (document.visibilityState === "visible") void refreshRoomsRef.current(true);
+    }
+    document.addEventListener("visibilitychange", handleVisibility);
+
     return () => {
       if (refreshTimerRef.current) clearInterval(refreshTimerRef.current);
+      document.removeEventListener("visibilitychange", handleVisibility);
     };
-  }, [connected, refreshRooms]);
+  }, [connected]);
 
   const sortedRooms = [...rooms].sort((a, b) => {
     if (a.status === "finished" && b.status !== "finished") return 1;

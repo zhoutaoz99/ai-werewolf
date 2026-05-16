@@ -34,7 +34,7 @@ type GameClientContextValue = {
   setError: (value: string) => void;
   getRoom: (roomId: string) => RoomSnapshot | null;
   getPlayerId: (roomId: string) => string | null;
-  refreshRooms: () => Promise<{ ok: boolean; error?: string }>;
+  refreshRooms: (silent?: boolean) => Promise<{ ok: boolean; error?: string }>;
   createRoom: () => Promise<ActionResult>;
   joinRoom: (roomId?: string) => Promise<ActionResult>;
   leaveRoom: (roomId: string) => Promise<ActionResult>;
@@ -230,19 +230,19 @@ export function GameClientProvider({ children }: { children: ReactNode }) {
       getRoom: (roomId: string) =>
         rooms.find((room) => room.id === roomId.toUpperCase()) ?? null,
       getPlayerId: (roomId: string) => playerIds[roomId.toUpperCase()] ?? null,
-      refreshRooms: () => {
-        setError("");
+      refreshRooms: (silent = false) => {
+        if (!silent) setError("");
         const socket = socketRef.current;
         if (!socket || !connected) {
           const result = {
             ok: false,
             error: "后端尚未连接，请确认 API 服务已启动",
           };
-          setError(result.error);
+          if (!silent) setError(result.error);
           return Promise.resolve(result);
         }
 
-        setPending(true);
+        if (!silent) setPending(true);
         return new Promise((resolve) => {
           socket
             .timeout(5_000)
@@ -253,13 +253,13 @@ export function GameClientProvider({ children }: { children: ReactNode }) {
                 err: Error | null,
                 result?: { ok: boolean; error?: string; rooms?: RoomSnapshot[] },
               ) => {
-                setPending(false);
+                if (!silent) setPending(false);
                 if (err) {
                   const timeoutResult = {
                     ok: false,
                     error: "刷新超时，请稍后重试",
                   };
-                  setError(timeoutResult.error);
+                  if (!silent) setError(timeoutResult.error);
                   resolve(timeoutResult);
                   return;
                 }
@@ -269,12 +269,23 @@ export function GameClientProvider({ children }: { children: ReactNode }) {
                     ok: false,
                     error: result?.error ?? "刷新失败",
                   };
-                  setError(failedResult.error);
+                  if (!silent) setError(failedResult.error);
                   resolve(failedResult);
                   return;
                 }
 
-                setRooms(result.rooms ?? []);
+                setRooms((current) => {
+                  const next = result.rooms ?? [];
+                  if (
+                    current.length === next.length &&
+                    current.every(
+                      (r, i) => JSON.stringify(r) === JSON.stringify(next[i]),
+                    )
+                  ) {
+                    return current;
+                  }
+                  return next;
+                });
                 resolve({ ok: true });
               },
             );
