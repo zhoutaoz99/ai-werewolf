@@ -132,11 +132,13 @@ export interface StartGamePayload {
 
 export interface SendChatPayload {
   roomId?: string;
+  playerId?: string;
   content?: string;
 }
 
 export interface CastVotePayload {
   roomId?: string;
+  playerId?: string;
   targetPlayerId?: string;
 }
 

@@ -298,7 +298,14 @@ export default function GamePage() {
   const room = getRoom(roomId);
   const playerId = getPlayerId(roomId);
 
-  // Auto-reconnect on page load/refresh
+  useEffect(() => {
+    if (!connected) {
+      reconnectAttempted.current = false;
+    }
+  }, [connected]);
+
+  // Socket.IO room membership is bound to the current socket, so rejoin on
+  // initial load and after every transport reconnect.
   useEffect(() => {
     if (!connected || reconnectAttempted.current) {
       return;
@@ -309,21 +316,9 @@ export default function GamePage() {
       return;
     }
 
-    const currentRoom = getRoom(roomId);
-    if (!currentRoom) {
-      return;
-    }
-
-    const playerInRoom = currentRoom.players.find(
-      (p) => p.id === storedPlayerId,
-    );
-    if (!playerInRoom || playerInRoom.connected) {
-      return;
-    }
-
     reconnectAttempted.current = true;
-    reconnectRoom(roomId);
-  }, [connected, roomId, getPlayerId, getRoom, reconnectRoom]);
+    void reconnectRoom(roomId);
+  }, [connected, roomId, getPlayerId, reconnectRoom]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1_000);

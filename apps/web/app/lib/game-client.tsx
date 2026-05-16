@@ -331,11 +331,13 @@ export function GameClientProvider({ children }: { children: ReactNode }) {
       sendChat: (roomId: string, content: string) =>
         emitAction("chat.send", {
           roomId,
+          playerId: playerIds[roomId.toUpperCase()],
           content,
         }),
       castVote: (roomId: string, targetPlayerId: string) =>
         emitAction("vote.cast", {
           roomId,
+          playerId: playerIds[roomId.toUpperCase()],
           targetPlayerId,
         }),
     };

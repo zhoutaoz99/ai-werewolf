@@ -264,6 +264,9 @@ export class GameService {
         if (!freshPlayer) {
           return false;
         }
+        if (freshPlayer.socketId !== socketId) {
+          return false;
+        }
 
         freshPlayer.connected = false;
         freshPlayer.socketId = undefined;
@@ -395,12 +398,12 @@ export class GameService {
       return this.fail("房间不存在");
     }
 
-    const player = this.findHumanBySocket(room, socketId);
-    if (!player) {
+    const actor = await this.findHumanForAction(room, socketId, payload.playerId);
+    if (!actor) {
       return this.fail("你不在该房间中");
     }
 
-    const validationError = this.validateCanSpeak(room, player);
+    const validationError = this.validateCanSpeak(actor.room, actor.player);
     if (validationError) {
       return this.fail(validationError);
     }
@@ -410,13 +413,13 @@ export class GameService {
       return this.fail("发言内容不能为空");
     }
 
-    this.addMessage(room, player, content);
-    await this.roomRepository.save(room);
-    this.broadcastRoom(room);
+    this.addMessage(actor.room, actor.player, content);
+    await this.roomRepository.save(actor.room);
+    this.broadcastRoom(actor.room);
 
     return {
       ok: true,
-      room: this.toSnapshot(room),
+      room: this.toSnapshot(actor.room),
     };
   }
 
@@ -429,12 +432,12 @@ export class GameService {
       return this.fail("房间不存在");
     }
 
-    const player = this.findHumanBySocket(room, socketId);
-    if (!player) {
+    const actor = await this.findHumanForAction(room, socketId, payload.playerId);
+    if (!actor) {
       return this.fail("你不在该房间中");
     }
 
-    return this.castVoteForPlayer(room, player, payload.targetPlayerId);
+    return this.castVoteForPlayer(actor.room, actor.player, payload.targetPlayerId);
   }
 
   async listRooms(): Promise<RoomSnapshot[]> {
@@ -1143,6 +1146,55 @@ export class GameService {
     return room.players.find(
       (player) => player.type === "human" && player.socketId === socketId,
     );
+  }
+
+  private async findHumanForAction(
+    room: Room,
+    socketId: string,
+    playerId: string | undefined,
+  ): Promise<{ room: Room; player: Player } | null> {
+    const socketPlayer = this.findHumanBySocket(room, socketId);
+    if (socketPlayer) {
+      return {
+        room,
+        player: socketPlayer,
+      };
+    }
+
+    if (!playerId) {
+      return null;
+    }
+
+    const saved = await this.applyWithLock(room.id, (latest) => {
+      const player = latest.players.find(
+        (candidate) =>
+          candidate.id === playerId && candidate.type === "human",
+      );
+      if (!player) {
+        return false;
+      }
+
+      this.cancelDisconnectRemoval(latest.id, player.id);
+      player.socketId = socketId;
+      player.connected = true;
+      this.touch(latest);
+      return true;
+    });
+    if (!saved) {
+      return null;
+    }
+
+    const player = saved.players.find(
+      (candidate) => candidate.id === playerId && candidate.type === "human",
+    );
+    if (!player) {
+      return null;
+    }
+
+    return {
+      room: saved,
+      player,
+    };
   }
 
   private countHumans(room: Room) {

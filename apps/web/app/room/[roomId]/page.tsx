@@ -233,7 +233,14 @@ export default function WaitingRoomPage() {
     }
   }, [setPlayerName, user]);
 
-  // Auto-reconnect on page load/refresh
+  useEffect(() => {
+    if (!connected) {
+      reconnectAttempted.current = false;
+    }
+  }, [connected]);
+
+  // Socket.IO room membership is bound to the current socket, so rejoin on
+  // initial load and after every transport reconnect.
   useEffect(() => {
     if (!connected || reconnectAttempted.current) {
       return;
@@ -244,21 +251,9 @@ export default function WaitingRoomPage() {
       return;
     }
 
-    const currentRoom = getRoom(roomId);
-    if (!currentRoom) {
-      return;
-    }
-
-    const playerInRoom = currentRoom.players.find(
-      (p) => p.id === storedPlayerId,
-    );
-    if (!playerInRoom || playerInRoom.connected) {
-      return;
-    }
-
     reconnectAttempted.current = true;
-    reconnectRoom(roomId);
-  }, [connected, roomId, getPlayerId, getRoom, reconnectRoom]);
+    void reconnectRoom(roomId);
+  }, [connected, roomId, getPlayerId, reconnectRoom]);
 
   async function handleJoinRoom() {
     if (!user) {

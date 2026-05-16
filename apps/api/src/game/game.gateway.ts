@@ -145,7 +145,11 @@ export class GameGateway
     @ConnectedSocket() client: Socket,
     @MessageBody() payload: SendChatPayload,
   ) {
-    return this.gameService.sendChat(client.id, payload ?? {});
+    const result = await this.gameService.sendChat(client.id, payload ?? {});
+    if (result.room) {
+      client.join(result.room.id);
+    }
+    return result;
   }
 
   @SubscribeMessage("vote.cast")
@@ -153,7 +157,11 @@ export class GameGateway
     @ConnectedSocket() client: Socket,
     @MessageBody() payload: CastVotePayload,
   ) {
-    return this.gameService.castVote(client.id, payload ?? {});
+    const result = await this.gameService.castVote(client.id, payload ?? {});
+    if (result.room) {
+      client.join(result.room.id);
+    }
+    return result;
   }
 
   private async getAccount(authToken: string | undefined): Promise<
