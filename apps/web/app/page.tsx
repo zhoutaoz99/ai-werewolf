@@ -1,11 +1,14 @@
 "use client";
 
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "./lib/auth-client";
 import { useGameClient } from "./lib/game-client";
 import { humanCount, statusLabel, winnerLabel } from "./lib/game-utils";
 
 export default function Home() {
   const router = useRouter();
+  const { user, pending: authPending, logout } = useAuth();
   const {
     connected,
     pending,
@@ -17,12 +20,30 @@ export default function Home() {
     setPlayerName,
     setRoomCode,
     setDiscussionMinutes,
+    setError,
     refreshRooms,
     createRoom,
     joinRoom,
   } = useGameClient();
+  const lobbyDisabled = pending || authPending || !user;
+
+  useEffect(() => {
+    if (user) {
+      setPlayerName(user.displayName);
+    }
+  }, [setPlayerName, user]);
+
+  async function handleLogout() {
+    await logout();
+    setError("请先登录账号");
+  }
 
   async function handleCreateRoom() {
+    if (!user) {
+      setError("请先登录账号");
+      return;
+    }
+
     const result = await createRoom();
     if (result.ok && result.room) {
       router.push(`/room/${result.room.id}`);
@@ -30,6 +51,11 @@ export default function Home() {
   }
 
   async function handleJoinRoom(roomId?: string) {
+    if (!user) {
+      setError("请先登录账号");
+      return;
+    }
+
     const result = await joinRoom(roomId);
     if (result.ok && result.room) {
       router.push(`/room/${result.room.id}`);
@@ -43,8 +69,20 @@ export default function Home() {
           <p className="eyebrow">AI Werewolf MVP</p>
           <h1>AI 狼人杀</h1>
         </div>
-        <div className={connected ? "status online" : "status offline"}>
-          {connected ? "后端已连接" : "后端未连接"}
+        <div className="topbar-actions">
+          {user && <div className="status account-status">{user.displayName}</div>}
+          {user ? (
+            <button className="compact-button" disabled={authPending} onClick={handleLogout}>
+              退出
+            </button>
+          ) : (
+            <button className="compact-button" onClick={() => router.push("/account")}>
+              登录 / 注册
+            </button>
+          )}
+          <div className={connected ? "status online" : "status offline"}>
+            {connected ? "后端已连接" : "后端未连接"}
+          </div>
         </div>
       </section>
 
@@ -58,12 +96,19 @@ export default function Home() {
           <label className="field">
             <span>昵称</span>
             <input
-              value={playerName}
+              value={user?.displayName ?? playerName}
+              disabled
               maxLength={16}
-              placeholder="输入你的玩家名"
-              onChange={(event) => setPlayerName(event.target.value)}
+              placeholder="登录后使用账号昵称"
+              onChange={() => undefined}
             />
           </label>
+
+          {!user && (
+            <button className="secondary" onClick={() => router.push("/account")}>
+              先登录账号
+            </button>
+          )}
 
           <label className="field">
             <span>每轮发言时间（分钟）</span>
@@ -78,7 +123,7 @@ export default function Home() {
             />
           </label>
 
-          <button disabled={pending} onClick={handleCreateRoom}>
+          <button disabled={lobbyDisabled} onClick={handleCreateRoom}>
             创建房间
           </button>
 
@@ -91,7 +136,11 @@ export default function Home() {
             />
           </label>
 
-          <button className="secondary" disabled={pending} onClick={() => handleJoinRoom()}>
+          <button
+            className="secondary"
+            disabled={lobbyDisabled}
+            onClick={() => handleJoinRoom()}
+          >
             加入房间
           </button>
 
@@ -127,7 +176,7 @@ export default function Home() {
                   <button
                     className="room-row"
                     key={room.id}
-                    disabled={room.status !== "waiting" || pending}
+                    disabled={room.status !== "waiting" || lobbyDisabled}
                     onClick={() => handleJoinRoom(room.id)}
                   >
                     <span>{room.id}</span>

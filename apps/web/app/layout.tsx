@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { AuthProvider } from "./lib/auth-client";
 import { GameClientProvider } from "./lib/game-client";
 import "./globals.css";
 
@@ -15,7 +16,9 @@ export default function RootLayout({
   return (
     <html lang="zh-CN">
       <body>
-        <GameClientProvider>{children}</GameClientProvider>
+        <AuthProvider>
+          <GameClientProvider>{children}</GameClientProvider>
+        </AuthProvider>
       </body>
     </html>
   );

@@ -11,6 +11,7 @@ export type Winner = "human" | "ai" | null;
 
 export interface Player {
   id: string;
+  accountId?: string;
   socketId?: string;
   name: string;
   type: PlayerType;
@@ -99,13 +100,20 @@ export interface RoomSnapshot {
 }
 
 export interface CreateRoomPayload {
+  authToken?: string;
   playerName?: string;
   discussionDurationMinutes?: number;
 }
 
 export interface JoinRoomPayload {
+  authToken?: string;
   roomId?: string;
   playerName?: string;
+}
+
+export interface GameAccount {
+  id: string;
+  displayName: string;
 }
 
 export interface StartGamePayload {

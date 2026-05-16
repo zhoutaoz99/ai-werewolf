@@ -11,6 +11,7 @@ import {
   useState,
 } from "react";
 import { io, Socket } from "socket.io-client";
+import { useAuth } from "./auth-client";
 import { ActionResult, RoomSnapshot, ServerReadyPayload } from "./game-types";
 
 type GameClientContextValue = {
@@ -44,6 +45,7 @@ const PLAYER_ID_PREFIX = "ai-werewolf-player-";
 const GameClientContext = createContext<GameClientContextValue | null>(null);
 
 export function GameClientProvider({ children }: { children: ReactNode }) {
+  const { token, user } = useAuth();
   const socketRef = useRef<Socket | null>(null);
   const [connected, setConnected] = useState(false);
   const [pending, setPending] = useState(false);
@@ -181,7 +183,7 @@ export function GameClientProvider({ children }: { children: ReactNode }) {
   );
 
   const value = useMemo<GameClientContextValue>(() => {
-    const normalizedName = playerName.trim();
+    const normalizedName = (user?.displayName ?? playerName).trim();
 
     return {
       connected,
@@ -257,6 +259,7 @@ export function GameClientProvider({ children }: { children: ReactNode }) {
 
         window.localStorage.setItem(PLAYER_NAME_KEY, normalizedName);
         return emitAction("room.create", {
+          authToken: token || undefined,
           playerName: normalizedName,
           discussionDurationMinutes: Math.max(1, Math.floor(discussionMinutes)),
         });
@@ -276,6 +279,7 @@ export function GameClientProvider({ children }: { children: ReactNode }) {
 
         window.localStorage.setItem(PLAYER_NAME_KEY, normalizedName);
         return emitAction("room.join", {
+          authToken: token || undefined,
           roomId: targetRoomId,
           playerName: normalizedName,
         });
@@ -327,6 +331,8 @@ export function GameClientProvider({ children }: { children: ReactNode }) {
     playerName,
     roomCode,
     rooms,
+    token,
+    user?.displayName,
   ]);
 
   return (

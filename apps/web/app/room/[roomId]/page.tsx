@@ -2,12 +2,14 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useRef } from "react";
+import { useAuth } from "../../lib/auth-client";
 import { useGameClient } from "../../lib/game-client";
 import { humanCount, statusLabel } from "../../lib/game-utils";
 
 export default function WaitingRoomPage() {
   const params = useParams<{ roomId: string }>();
   const router = useRouter();
+  const { user } = useAuth();
   const roomId = params.roomId.toUpperCase();
   const reconnectAttempted = useRef(false);
   const {
@@ -16,6 +18,7 @@ export default function WaitingRoomPage() {
     error,
     playerName,
     setPlayerName,
+    setError,
     getRoom,
     getPlayerId,
     joinRoom,
@@ -37,6 +40,12 @@ export default function WaitingRoomPage() {
       router.replace(`/game/${room.id}`);
     }
   }, [room?.id, room?.status, router]);
+
+  useEffect(() => {
+    if (user) {
+      setPlayerName(user.displayName);
+    }
+  }, [setPlayerName, user]);
 
   // Auto-reconnect on page load/refresh
   useEffect(() => {
@@ -64,6 +73,11 @@ export default function WaitingRoomPage() {
   }, [connected, roomId, getPlayerId, getRoom, reconnectRoom]);
 
   async function handleJoinRoom() {
+    if (!user) {
+      setError("请先登录账号");
+      return;
+    }
+
     const result = await joinRoom(roomId);
     if (result.ok && result.room?.status === "playing") {
       router.replace(`/game/${result.room.id}`);
@@ -94,8 +108,16 @@ export default function WaitingRoomPage() {
           <p className="eyebrow">Waiting Room</p>
           <h1>房间 {roomId}</h1>
         </div>
-        <div className={connected ? "status online" : "status offline"}>
-          {connected ? "后端已连接" : "后端未连接"}
+        <div className="topbar-actions">
+          {user && <div className="status account-status">{user.displayName}</div>}
+          {!user && (
+            <button className="compact-button" onClick={() => router.push("/account")}>
+              登录 / 注册
+            </button>
+          )}
+          <div className={connected ? "status online" : "status offline"}>
+            {connected ? "后端已连接" : "后端未连接"}
+          </div>
         </div>
       </section>
 
@@ -108,15 +130,21 @@ export default function WaitingRoomPage() {
           <label className="field">
             <span>昵称</span>
             <input
-              value={playerName}
+              value={user?.displayName ?? playerName}
+              disabled
               maxLength={16}
-              placeholder="输入你的玩家名"
-              onChange={(event) => setPlayerName(event.target.value)}
+              placeholder="登录后使用账号昵称"
+              onChange={() => undefined}
             />
           </label>
-          <button disabled={pending} onClick={handleJoinRoom}>
+          <button disabled={pending || !user} onClick={handleJoinRoom}>
             加入房间
           </button>
+          {!user && (
+            <button onClick={() => router.push("/account")}>
+              登录 / 注册
+            </button>
+          )}
           {error && <p className="error">{error}</p>}
           <button className="secondary" onClick={() => router.push("/")}>
             返回大厅
@@ -165,15 +193,21 @@ export default function WaitingRoomPage() {
                 <label className="field">
                   <span>昵称</span>
                   <input
-                    value={playerName}
+                    value={user?.displayName ?? playerName}
+                    disabled
                     maxLength={16}
-                    placeholder="输入你的玩家名"
-                    onChange={(event) => setPlayerName(event.target.value)}
+                    placeholder="登录后使用账号昵称"
+                    onChange={() => undefined}
                   />
                 </label>
-                <button disabled={pending} onClick={handleJoinRoom}>
+                <button disabled={pending || !user} onClick={handleJoinRoom}>
                   加入房间
                 </button>
+                {!user && (
+                  <button onClick={() => router.push("/account")}>
+                    登录 / 注册
+                  </button>
+                )}
               </>
             )}
 

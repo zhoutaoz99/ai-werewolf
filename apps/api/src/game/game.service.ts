@@ -8,6 +8,7 @@ import {
   CastVotePayload,
   ChatMessage,
   CreateRoomPayload,
+  GameAccount,
   GamePhase,
   JoinRoomPayload,
   LeaveRoomPayload,
@@ -64,9 +65,18 @@ export class GameService {
     this.server = server;
   }
 
-  createRoom(socketId: string, payload: CreateRoomPayload): ActionResult {
+  createRoom(
+    socketId: string,
+    payload: CreateRoomPayload,
+    account?: GameAccount | null,
+  ): ActionResult {
     const now = new Date().toISOString();
-    const host = this.createHumanPlayer(payload.playerName, socketId, 1);
+    const host = this.createHumanPlayer(
+      account?.displayName ?? payload.playerName,
+      socketId,
+      1,
+      account?.id,
+    );
     const aiPlayers = this.createAiPlayers(2);
     const room: Room = {
       id: this.createRoomId(),
@@ -92,12 +102,36 @@ export class GameService {
     };
   }
 
-  joinRoom(socketId: string, payload: JoinRoomPayload): ActionResult {
+  joinRoom(
+    socketId: string,
+    payload: JoinRoomPayload,
+    account?: GameAccount | null,
+  ): ActionResult {
     const roomId = this.normalizeRoomId(payload.roomId);
     const room = this.rooms.get(roomId);
 
     if (!room) {
       return this.fail("房间不存在");
+    }
+
+    if (account) {
+      const existingAccountPlayer = room.players.find(
+        (candidate) =>
+          candidate.type === "human" && candidate.accountId === account.id,
+      );
+      if (existingAccountPlayer) {
+        this.cancelDisconnectRemoval(room.id, existingAccountPlayer.id);
+        existingAccountPlayer.socketId = socketId;
+        existingAccountPlayer.connected = true;
+        existingAccountPlayer.name = account.displayName;
+        this.touch(room);
+
+        return {
+          ok: true,
+          room: this.toSnapshot(room),
+          playerId: existingAccountPlayer.id,
+        };
+      }
     }
 
     if (room.status !== "waiting") {
@@ -110,9 +144,10 @@ export class GameService {
     }
 
     const player = this.createHumanPlayer(
-      payload.playerName,
+      account?.displayName ?? payload.playerName,
       socketId,
       room.players.length + 1,
+      account?.id,
     );
     room.players.push(player);
     this.touch(room);
@@ -179,13 +214,7 @@ export class GameService {
       return this.fail("玩家不存在于该房间");
     }
 
-    // Cancel pending disconnect removal
-    const timerKey = `${room.id}:${player.id}`;
-    const existingTimer = this.disconnectTimers.get(timerKey);
-    if (existingTimer) {
-      clearTimeout(existingTimer);
-      this.disconnectTimers.delete(timerKey);
-    }
+    this.cancelDisconnectRemoval(room.id, player.id);
 
     player.socketId = socketId;
     player.connected = true;
@@ -837,9 +866,11 @@ export class GameService {
     playerName: string | undefined,
     socketId: string,
     seatNo: number,
+    accountId?: string,
   ): Player {
     return {
       id: randomUUID(),
+      accountId,
       socketId,
       name: this.normalizePlayerName(playerName),
       type: "human",
@@ -901,6 +932,17 @@ export class GameService {
 
   private countHumans(room: Room) {
     return room.players.filter((player) => player.type === "human").length;
+  }
+
+  private cancelDisconnectRemoval(roomId: string, playerId: string) {
+    const timerKey = `${roomId}:${playerId}`;
+    const existingTimer = this.disconnectTimers.get(timerKey);
+    if (!existingTimer) {
+      return;
+    }
+
+    clearTimeout(existingTimer);
+    this.disconnectTimers.delete(timerKey);
   }
 
   private futureIso(durationMs: number) {

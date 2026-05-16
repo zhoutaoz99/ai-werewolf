@@ -74,6 +74,11 @@ input:focus {
   outline: 3px solid rgba(15, 118, 110, 0.16);
 }
 
+input:disabled {
+  background: #f8fafc;
+  color: var(--muted);
+}
+
 h1,
 h2,
 h3,
@@ -93,6 +98,14 @@ p {
   justify-content: space-between;
   gap: 16px;
   margin-bottom: 20px;
+}
+
+.topbar-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
 }
 
 .topbar h1 {
@@ -127,6 +140,11 @@ p {
 .status.offline {
   border-color: rgba(180, 35, 24, 0.22);
   color: var(--danger);
+}
+
+.account-status {
+  border-color: rgba(67, 56, 202, 0.24);
+  color: #3730a3;
 }
 
 .layout {
@@ -466,11 +484,74 @@ p {
 }
 
 .lobby-card,
+.auth-card,
 .waiting-card {
   align-content: start;
   display: grid;
   gap: 16px;
   padding: 18px;
+}
+
+.auth-shell {
+  min-height: 100vh;
+}
+
+.auth-layout {
+  display: grid;
+  margin: 0 auto;
+  width: min(420px, 100%);
+}
+
+.auth-form {
+  display: grid;
+  gap: 14px;
+}
+
+.auth-tabs {
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  grid-template-columns: 1fr 1fr;
+  padding: 4px;
+}
+
+.auth-tabs button {
+  background: transparent;
+  color: var(--muted);
+  min-height: 34px;
+  padding: 0 10px;
+}
+
+.auth-tabs button:hover:not(:disabled),
+.auth-tabs button.selected {
+  background: #334155;
+  color: #ffffff;
+}
+
+.account-summary {
+  display: grid;
+  gap: 14px;
+}
+
+.account-summary div {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+}
+
+.account-summary span,
+.account-summary small {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.account-summary strong {
+  font-size: 22px;
 }
 
 .section-heading-row {
@@ -492,6 +573,7 @@ p {
 }
 
 .lobby-card h2,
+.auth-card h2,
 .waiting-card h2 {
   font-size: 24px;
 }

@@ -9,6 +9,8 @@ import {
   WebSocketServer,
 } from "@nestjs/websockets";
 import { Server, Socket } from "socket.io";
+import { AuthService } from "../auth/auth.service";
+import { AuthenticatedAccount } from "../auth/auth.types";
 import {
   CastVotePayload,
   CreateRoomPayload,
@@ -31,7 +33,10 @@ export class GameGateway
   @WebSocketServer()
   server!: Server;
 
-  constructor(private readonly gameService: GameService) {}
+  constructor(
+    private readonly gameService: GameService,
+    private readonly authService: AuthService,
+  ) {}
 
   afterInit(server: Server) {
     this.gameService.bindServer(server);
@@ -64,7 +69,16 @@ export class GameGateway
     @ConnectedSocket() client: Socket,
     @MessageBody() payload: CreateRoomPayload,
   ) {
-    const result = this.gameService.createRoom(client.id, payload ?? {});
+    const authResult = this.getAccount(payload?.authToken);
+    if (!authResult.ok) {
+      return authResult;
+    }
+
+    const result = this.gameService.createRoom(
+      client.id,
+      payload ?? {},
+      authResult.account,
+    );
     if (result.room) {
       client.join(result.room.id);
       this.server.to(result.room.id).emit("room.updated", result.room);
@@ -77,7 +91,16 @@ export class GameGateway
     @ConnectedSocket() client: Socket,
     @MessageBody() payload: JoinRoomPayload,
   ) {
-    const result = this.gameService.joinRoom(client.id, payload ?? {});
+    const authResult = this.getAccount(payload?.authToken);
+    if (!authResult.ok) {
+      return authResult;
+    }
+
+    const result = this.gameService.joinRoom(
+      client.id,
+      payload ?? {},
+      authResult.account,
+    );
     if (result.room) {
       client.join(result.room.id);
       this.server.to(result.room.id).emit("room.updated", result.room);
@@ -130,5 +153,35 @@ export class GameGateway
     @MessageBody() payload: CastVotePayload,
   ) {
     return this.gameService.castVote(client.id, payload ?? {});
+  }
+
+  private getAccount(authToken: string | undefined):
+    | {
+        ok: true;
+        account: AuthenticatedAccount | null;
+      }
+    | {
+        ok: false;
+        error: string;
+      } {
+    if (authToken === undefined) {
+      return {
+        ok: true,
+        account: null,
+      };
+    }
+
+    const account = this.authService.getAccountByToken(authToken);
+    if (!account) {
+      return {
+        ok: false,
+        error: "登录状态已过期，请重新登录",
+      };
+    }
+
+    return {
+      ok: true,
+      account,
+    };
   }
 }
