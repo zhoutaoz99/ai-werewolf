@@ -11,6 +11,7 @@ import {
   AuthenticatedAccount,
   AuthRequestPayload,
   AuthResult,
+  ProfileUpdatePayload,
   PublicAccount,
 } from "./auth.types";
 
@@ -19,6 +20,7 @@ const USERNAME_PATTERN = /^[a-zA-Z0-9_]{3,20}$/;
 const MIN_PASSWORD_LENGTH = 6;
 const MAX_PASSWORD_LENGTH = 72;
 const MAX_DISPLAY_NAME_LENGTH = 16;
+const INITIAL_POINTS = 1000;
 
 @Injectable()
 export class AuthService {
@@ -48,6 +50,7 @@ export class AuthService {
       id: randomUUID(),
       username,
       displayName,
+      points: INITIAL_POINTS,
       passwordSalt: salt,
       passwordHash: await this.hashPassword(password, salt),
       createdAt: now,
@@ -103,6 +106,37 @@ export class AuthService {
 
     const record = this.findAccountById(account.id);
     return record ? this.toPublicAccount(record) : null;
+  }
+
+  updateProfile(
+    token: string | undefined,
+    payload: ProfileUpdatePayload,
+  ): AuthResult {
+    const normalizedToken = this.normalizeToken(token);
+    if (!normalizedToken) {
+      return this.fail("未登录或登录已过期");
+    }
+
+    const session = this.sessions.get(normalizedToken);
+    if (!session) {
+      return this.fail("未登录或登录已过期");
+    }
+
+    const account = this.findAccountById(session.userId);
+    if (!account) {
+      this.sessions.delete(normalizedToken);
+      return this.fail("未登录或登录已过期");
+    }
+
+    account.displayName =
+      this.normalizeDisplayName(payload.displayName) || account.username;
+    account.updatedAt = new Date().toISOString();
+    session.lastSeenAt = account.updatedAt;
+
+    return {
+      ok: true,
+      user: this.toPublicAccount(account),
+    };
   }
 
   logout(token: string | undefined) {
@@ -174,6 +208,7 @@ export class AuthService {
       id: account.id,
       username: account.username,
       displayName: account.displayName,
+      points: account.points,
       createdAt: account.createdAt,
     };
   }

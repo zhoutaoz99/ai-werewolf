@@ -14,6 +14,7 @@ export type AuthUser = {
   id: string;
   username: string;
   displayName: string;
+  points: number;
   createdAt: string;
 };
 
@@ -30,6 +31,10 @@ type AuthResult = {
   user?: AuthUser;
 };
 
+type ProfilePayload = {
+  displayName?: string;
+};
+
 type AuthClientContextValue = {
   user: AuthUser | null;
   token: string;
@@ -38,6 +43,7 @@ type AuthClientContextValue = {
   setError: (value: string) => void;
   register: (payload: AuthPayload) => Promise<AuthResult>;
   login: (payload: AuthPayload) => Promise<AuthResult>;
+  updateProfile: (payload: ProfilePayload) => Promise<AuthResult>;
   logout: () => Promise<void>;
   refreshMe: () => Promise<AuthResult>;
 };
@@ -169,6 +175,56 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [clearSession, token]);
 
+  const updateProfile = useCallback(
+    async (payload: ProfilePayload) => {
+      const currentToken = token || window.localStorage.getItem(AUTH_TOKEN_KEY) || "";
+      if (!currentToken) {
+        const failedResult = {
+          ok: false,
+          error: "请先登录账号",
+        };
+        setError(failedResult.error);
+        return failedResult;
+      }
+
+      setError("");
+      setPending(true);
+      try {
+        const response = await fetch(`${API_URL}/auth/profile`, {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${currentToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        });
+        const result = (await response.json()) as AuthResult;
+
+        if (!result.ok || !result.user) {
+          const failedResult = {
+            ok: false,
+            error: result.error ?? "个人信息更新失败",
+          };
+          setError(failedResult.error);
+          return failedResult;
+        }
+
+        setUser(result.user);
+        return result;
+      } catch {
+        const failedResult = {
+          ok: false,
+          error: "无法连接账号服务",
+        };
+        setError(failedResult.error);
+        return failedResult;
+      } finally {
+        setPending(false);
+      }
+    },
+    [token],
+  );
+
   useEffect(() => {
     void refreshMe();
   }, [refreshMe]);
@@ -182,10 +238,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setError,
       register: (payload) => requestAuth("register", payload),
       login: (payload) => requestAuth("login", payload),
+      updateProfile,
       logout,
       refreshMe,
     }),
-    [error, logout, pending, refreshMe, requestAuth, token, user],
+    [error, logout, pending, refreshMe, requestAuth, token, updateProfile, user],
   );
 
   return (

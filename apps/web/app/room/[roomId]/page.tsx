@@ -110,6 +110,11 @@ export default function WaitingRoomPage() {
         </div>
         <div className="topbar-actions">
           {user && <div className="status account-status">{user.displayName}</div>}
+          {user && (
+            <button className="compact-button" onClick={() => router.push("/profile")}>
+              个人信息
+            </button>
+          )}
           {!user && (
             <button className="compact-button" onClick={() => router.push("/account")}>
               登录 / 注册

@@ -4,10 +4,15 @@ export interface AuthRequestPayload {
   displayName?: string;
 }
 
+export interface ProfileUpdatePayload {
+  displayName?: string;
+}
+
 export interface AccountRecord {
   id: string;
   username: string;
   displayName: string;
+  points: number;
   passwordSalt: string;
   passwordHash: string;
   createdAt: string;
@@ -18,6 +23,7 @@ export interface PublicAccount {
   id: string;
   username: string;
   displayName: string;
+  points: number;
   createdAt: string;
 }
 

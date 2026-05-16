@@ -1,6 +1,6 @@
-import { Body, Controller, Get, Headers, Post } from "@nestjs/common";
+import { Body, Controller, Get, Headers, Patch, Post } from "@nestjs/common";
 import { AuthService } from "./auth.service";
-import { AuthRequestPayload } from "./auth.types";
+import { AuthRequestPayload, ProfileUpdatePayload } from "./auth.types";
 
 @Controller("auth")
 export class AuthController {
@@ -38,6 +38,17 @@ export class AuthController {
   @Post("logout")
   logout(@Headers("authorization") authorization: string | undefined) {
     return this.authService.logout(this.getBearerToken(authorization));
+  }
+
+  @Patch("profile")
+  updateProfile(
+    @Headers("authorization") authorization: string | undefined,
+    @Body() payload: ProfileUpdatePayload,
+  ) {
+    return this.authService.updateProfile(
+      this.getBearerToken(authorization),
+      payload ?? {},
+    );
   }
 
   private getBearerToken(authorization: string | undefined) {

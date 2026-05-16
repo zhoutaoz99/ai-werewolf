@@ -80,8 +80,16 @@ export default function AccountPage() {
                 <strong>{user.displayName}</strong>
                 <small>@{user.username}</small>
               </div>
+              <div>
+                <span>积分</span>
+                <strong>{user.points}</strong>
+                <small>初始积分 1000</small>
+              </div>
               <button className="secondary" disabled={pending} onClick={handleLogout}>
                 退出登录
+              </button>
+              <button disabled={pending} onClick={() => router.push("/profile")}>
+                管理个人信息
               </button>
               <button disabled={pending} onClick={() => router.push("/")}>
                 返回大厅

@@ -72,9 +72,22 @@ export default function Home() {
         <div className="topbar-actions">
           {user && <div className="status account-status">{user.displayName}</div>}
           {user ? (
-            <button className="compact-button" disabled={authPending} onClick={handleLogout}>
-              退出
-            </button>
+            <>
+              <button
+                className="compact-button"
+                disabled={authPending}
+                onClick={() => router.push("/profile")}
+              >
+                个人信息
+              </button>
+              <button
+                className="compact-button"
+                disabled={authPending}
+                onClick={handleLogout}
+              >
+                退出
+              </button>
+            </>
           ) : (
             <button className="compact-button" onClick={() => router.push("/account")}>
               登录 / 注册
