@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "./lib/auth-client";
 import { useGameClient } from "./lib/game-client";
@@ -162,6 +162,25 @@ export default function Home() {
     joinRoom,
   } = useGameClient();
   const lobbyDisabled = pending || authPending || !user;
+
+  const ROOMS_PER_PAGE = 5;
+  const [roomPage, setRoomPage] = useState(1);
+
+  const sortedRooms = [...rooms].sort((a, b) => {
+    if (a.status === "finished" && b.status !== "finished") return 1;
+    if (a.status !== "finished" && b.status === "finished") return -1;
+    return 0;
+  });
+
+  const totalPages = Math.max(1, Math.ceil(sortedRooms.length / ROOMS_PER_PAGE));
+  const paginatedRooms = sortedRooms.slice(
+    (roomPage - 1) * ROOMS_PER_PAGE,
+    roomPage * ROOMS_PER_PAGE,
+  );
+
+  useEffect(() => {
+    setRoomPage(1);
+  }, [rooms.length]);
 
   useEffect(() => {
     if (user) {
@@ -369,7 +388,7 @@ export default function Home() {
             </button>
           </div>
 
-          {rooms.length === 0 ? (
+          {sortedRooms.length === 0 ? (
             <div className="empty-rooms">
               <IconEmpty />
               <p>暂无可加入的房间</p>
@@ -378,16 +397,9 @@ export default function Home() {
               </p>
             </div>
           ) : (
-            <div className="room-list no-border">
-              {[...rooms]
-                .sort((a, b) => {
-                  if (a.status === "finished" && b.status !== "finished")
-                    return 1;
-                  if (a.status !== "finished" && b.status === "finished")
-                    return -1;
-                  return 0;
-                })
-                .map((room) => {
+            <>
+              <div className="room-list no-border">
+                {paginatedRooms.map((room) => {
                   const humans = humanCount(room);
                   const maxHumans = room.config.maxHumanPlayers;
                   const aiCount = room.config.aiPlayerCount;
@@ -440,7 +452,50 @@ export default function Home() {
                     </button>
                   );
                 })}
-            </div>
+              </div>
+
+              {totalPages > 1 && (
+                <div className="pagination-bar">
+                  <button
+                    className="page-btn"
+                    disabled={roomPage <= 1}
+                    onClick={() => setRoomPage((p) => Math.max(1, p - 1))}
+                    aria-label="上一页"
+                  >
+                    ← 上一页
+                  </button>
+                  <div className="page-numbers">
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map(
+                      (page) => (
+                        <button
+                          key={page}
+                          className={`page-num ${page === roomPage ? "active" : ""}`}
+                          onClick={() => setRoomPage(page)}
+                          aria-label={`第 ${page} 页`}
+                        >
+                          {page}
+                        </button>
+                      ),
+                    )}
+                  </div>
+                  <button
+                    className="page-btn"
+                    disabled={roomPage >= totalPages}
+                    onClick={() =>
+                      setRoomPage((p) => Math.min(totalPages, p + 1))
+                    }
+                    aria-label="下一页"
+                  >
+                    下一页 →
+                  </button>
+                </div>
+              )}
+
+              <div className="room-list-footer">
+                共 {sortedRooms.length} 个房间
+                {totalPages > 1 && ` · 第 ${roomPage}/${totalPages} 页`}
+              </div>
+            </>
           )}
         </section>
       </section>
