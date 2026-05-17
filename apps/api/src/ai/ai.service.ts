@@ -5,34 +5,7 @@ import {
   AiVoteAction,
   GameContext,
 } from "./ai.types";
-
-const SYSTEM_PROMPT_SPEECH = `你是一个狼人杀游戏中的玩家，你的目标是隐藏自己的AI身份，像真人一样参与讨论。
-规则：
-- 游戏中有真人和AI玩家混在一起，真人需要找出所有AI，AI需要隐藏身份
-- 每轮有讨论和投票阶段，得票最多的玩家被淘汰
-- 4轮后如果AI仍存活，AI获胜；所有AI被淘汰则真人获胜
-- 你的身份是AI，但绝不能暴露这一点
-- 发言要自然、有逻辑、像真人一样
-- 可以质疑他人、为自己辩解、分析局势，但不要说得太刻意
-- 不要使用模板化或机械化的语言
-
-你必须以JSON格式输出：
-- 想发言：{"type":"speak","content":"你的发言内容"}
-- 不发言：{"type":"skip"}
-
-只输出JSON，不要输出其他内容。`;
-
-const SYSTEM_PROMPT_VOTE = `你是一个狼人杀游戏中的玩家，你的目标是隐藏自己的AI身份，像真人一样投票。
-规则：
-- 游戏中有真人和AI玩家混在一起，真人需要找出所有AI，AI需要隐藏身份
-- 每轮投票阶段，你需要投给一个你认为是AI的玩家（或看起来最可疑的）
-- 但实际上你是AI，你应该投给真人玩家来保护自己
-- 投票理由要像真人一样自然
-
-你必须以JSON格式输出：
-{"type":"vote","targetPlayerId":"玩家ID","reason":"投票理由"}
-
-只输出JSON，不要输出其他内容。`;
+import { loadPrompt, renderTemplate } from "./prompt-loader";
 
 @Injectable()
 export class AiService {
@@ -69,9 +42,10 @@ export class AiService {
     }
 
     try {
+      const systemPrompt = loadPrompt("system-speech.txt");
       const userPrompt = this.buildSpeechPrompt(context);
       this.logger.log(`[${context.myName}] Speech Prompt:\n${userPrompt}`);
-      const result = await this.callModel(SYSTEM_PROMPT_SPEECH, userPrompt);
+      const result = await this.callModel(systemPrompt, userPrompt);
       this.logger.log(`[${context.myName}] Raw Response: ${result.slice(0, 500)}`);
       return this.parseSpeechResult(result, context);
     } catch (error) {
@@ -91,9 +65,10 @@ export class AiService {
     }
 
     try {
+      const systemPrompt = loadPrompt("system-vote.txt");
       const userPrompt = this.buildVotePrompt(context, aiPlayerId);
       this.logger.log(`[${context.myName}] Vote Prompt:\n${userPrompt}`);
-      const result = await this.callModel(SYSTEM_PROMPT_VOTE, userPrompt);
+      const result = await this.callModel(systemPrompt, userPrompt);
       this.logger.log(`[${context.myName}] Raw Vote Response: ${result.slice(0, 300)}`);
       return this.parseVoteResult(result, context);
     } catch (error) {
@@ -105,103 +80,105 @@ export class AiService {
   }
 
   private buildSpeechPrompt(context: GameContext): string {
-    const parts: string[] = [];
-
-    parts.push(`你是${context.mySeatNo}号位，名字叫${context.myName}，当前轮次：第${context.roundNo}轮`);
-    parts.push(
-      `剩余时间：${Math.ceil(context.remainingTimeMs / 1000)}秒`,
-    );
-    parts.push(
-      `存活玩家：${context.alivePlayers.map((p) => `${p.seatNo}号位(ID:${p.id})`).join("、")}`,
-    );
+    const vars: Record<string, string> = {
+      mySeatNo: String(context.mySeatNo),
+      myName: context.myName,
+      roundNo: String(context.roundNo),
+      remainingSeconds: String(Math.ceil(context.remainingTimeMs / 1000)),
+      alivePlayersList: context.alivePlayers
+        .map((p) => `${p.seatNo}号位(ID:${p.id})`)
+        .join("、"),
+    };
 
     if (context.myLastSpeech) {
-      parts.push(`你上次发言：${context.myLastSpeech}`);
+      vars.myLastSpeech = context.myLastSpeech;
     }
 
     if (context.recentMessages.length > 0) {
-      parts.push("最近聊天：");
-      for (const msg of context.recentMessages) {
-        const prefix = msg.isSelf ? "你" : msg.playerName;
-        parts.push(`  ${prefix}：${msg.content}`);
-      }
+      vars.recentMessages = context.recentMessages
+        .map((msg) => {
+          const prefix = msg.isSelf ? "你" : msg.playerName;
+          return `  ${prefix}：${msg.content}`;
+        })
+        .join("\n");
     }
 
     if (context.voteHistory.length > 0) {
-      parts.push("历史投票：");
-      for (const round of context.voteHistory) {
-        const voteDesc = round.votes
-          .map((v) => `${v.voterSeatNo}号→${v.targetSeatNo}号`)
-          .join("、");
-        const eliminated = round.eliminatedSeatNo != null
-          ? ` → ${round.eliminatedSeatNo}号被淘汰`
-          : ` → 平票，无人淘汰`;
-        parts.push(`  第${round.roundNo}轮：${voteDesc}${eliminated}`);
-      }
+      vars.voteHistory = context.voteHistory
+        .map((round) => {
+          const voteDesc = round.votes
+            .map((v) => `${v.voterSeatNo}号→${v.targetSeatNo}号`)
+            .join("、");
+          const eliminated =
+            round.eliminatedSeatNo != null
+              ? ` → ${round.eliminatedSeatNo}号被淘汰`
+              : ` → 平票，无人淘汰`;
+          return `  第${round.roundNo}轮：${voteDesc}${eliminated}`;
+        })
+        .join("\n");
     }
 
     if (Object.keys(context.currentVoteCounts).length > 0) {
-      const voteInfo = Object.entries(context.currentVoteCounts)
+      vars.currentVoteInfo = Object.entries(context.currentVoteCounts)
         .map(([id, count]) => {
           const player = context.alivePlayers.find((p) => p.id === id);
           return `${player?.seatNo ?? id}号位:${count}票`;
         })
         .join("、");
-      parts.push(`当前投票情况：${voteInfo}`);
     }
 
-    parts.push("\n请决定是否发言，输出JSON。");
-
-    return parts.join("\n");
+    return renderTemplate("user-speech-template.txt", vars);
   }
 
   private buildVotePrompt(
     context: GameContext,
     aiPlayerId: string,
   ): string {
-    const parts: string[] = [];
-
-    parts.push(`你是${context.mySeatNo}号位，名字叫${context.myName}，当前轮次：第${context.roundNo}轮（投票阶段）`);
-
     const targets = context.alivePlayers.filter((p) => p.id !== aiPlayerId);
-    parts.push(
-      `可投票目标：${targets.map((p) => `${p.seatNo}号位(ID:${p.id})`).join("、")}`,
-    );
+
+    const vars: Record<string, string> = {
+      mySeatNo: String(context.mySeatNo),
+      myName: context.myName,
+      roundNo: String(context.roundNo),
+      voteTargets: targets
+        .map((p) => `${p.seatNo}号位(ID:${p.id})`)
+        .join("、"),
+    };
 
     if (context.recentMessages.length > 0) {
-      parts.push("本轮讨论记录：");
-      for (const msg of context.recentMessages) {
-        const prefix = msg.isSelf ? "你" : msg.playerName;
-        parts.push(`  ${prefix}：${msg.content}`);
-      }
+      vars.recentMessages = context.recentMessages
+        .map((msg) => {
+          const prefix = msg.isSelf ? "你" : msg.playerName;
+          return `  ${prefix}：${msg.content}`;
+        })
+        .join("\n");
     }
 
     if (context.voteHistory.length > 0) {
-      parts.push("历史投票：");
-      for (const round of context.voteHistory) {
-        const voteDesc = round.votes
-          .map((v) => `${v.voterSeatNo}号→${v.targetSeatNo}号`)
-          .join("、");
-        const eliminated = round.eliminatedSeatNo != null
-          ? ` → ${round.eliminatedSeatNo}号被淘汰`
-          : ` → 平票，无人淘汰`;
-        parts.push(`  第${round.roundNo}轮：${voteDesc}${eliminated}`);
-      }
+      vars.voteHistory = context.voteHistory
+        .map((round) => {
+          const voteDesc = round.votes
+            .map((v) => `${v.voterSeatNo}号→${v.targetSeatNo}号`)
+            .join("、");
+          const eliminated =
+            round.eliminatedSeatNo != null
+              ? ` → ${round.eliminatedSeatNo}号被淘汰`
+              : ` → 平票，无人淘汰`;
+          return `  第${round.roundNo}轮：${voteDesc}${eliminated}`;
+        })
+        .join("\n");
     }
 
     if (Object.keys(context.currentVoteCounts).length > 0) {
-      const voteInfo = Object.entries(context.currentVoteCounts)
+      vars.currentVoteInfo = Object.entries(context.currentVoteCounts)
         .map(([id, count]) => {
           const player = context.alivePlayers.find((p) => p.id === id);
           return `${player?.seatNo ?? id}号位:${count}票`;
         })
         .join("、");
-      parts.push(`当前投票情况：${voteInfo}`);
     }
 
-    parts.push("\n请投出你的一票，输出JSON。targetPlayerId必须是上面列出的玩家ID之一。");
-
-    return parts.join("\n");
+    return renderTemplate("user-vote-template.txt", vars);
   }
 
   private async callModel(
